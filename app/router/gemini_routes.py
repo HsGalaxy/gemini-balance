@@ -1,12 +1,12 @@
 import asyncio
 from copy import deepcopy
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.config.config import settings
 from app.core.constants import API_VERSION
-from app.core.security import SecurityService
+from app.core.security import SecurityService, verify_auth_token
 from app.domain.gemini_models import (
     GeminiBatchEmbedRequest,
     GeminiContent,
@@ -31,6 +31,14 @@ logger = get_gemini_logger()
 
 security_service = SecurityService()
 model_service = ModelService()
+
+
+async def verify_admin_cookie(request: Request):
+    """从 Cookie 中验证管理员身份令牌，仅限管理员操作的路由使用"""
+    auth_token = request.cookies.get("auth_token")
+    if not auth_token or not verify_auth_token(auth_token):
+        raise HTTPException(status_code=401, detail="未授权：需要管理员身份验证")
+    return auth_token
 
 
 async def get_key_manager():
@@ -340,7 +348,9 @@ async def batch_embed_contents(
 
 @router.post("/reset-all-fail-counts")
 async def reset_all_key_fail_counts(
-    key_type: str = None, key_manager: KeyManager = Depends(get_key_manager)
+    key_type: str = None,
+    key_manager: KeyManager = Depends(get_key_manager),
+    _admin=Depends(verify_admin_cookie),
 ):
     """批量重置Gemini API密钥的失败计数，可选择性地仅重置有效或无效密钥"""
     logger.info("-" * 50 + "reset_all_gemini_key_fail_counts" + "-" * 50)
@@ -389,6 +399,7 @@ async def reset_all_key_fail_counts(
 async def reset_selected_key_fail_counts(
     request: ResetSelectedKeysRequest,
     key_manager: KeyManager = Depends(get_key_manager),
+    _admin=Depends(verify_admin_cookie),
 ):
     """批量重置选定Gemini API密钥的失败计数"""
     logger.info("-" * 50 + "reset_selected_gemini_key_fail_counts" + "-" * 50)
@@ -454,7 +465,9 @@ async def reset_selected_key_fail_counts(
 
 @router.post("/reset-fail-count/{api_key}")
 async def reset_key_fail_count(
-    api_key: str, key_manager: KeyManager = Depends(get_key_manager)
+    api_key: str,
+    key_manager: KeyManager = Depends(get_key_manager),
+    _admin=Depends(verify_admin_cookie),
 ):
     """重置指定Gemini API密钥的失败计数"""
     logger.info("-" * 50 + "reset_gemini_key_fail_count" + "-" * 50)
@@ -481,6 +494,7 @@ async def verify_key(
     api_key: str,
     chat_service: GeminiChatService = Depends(get_chat_service),
     key_manager: KeyManager = Depends(get_key_manager),
+    _admin=Depends(verify_admin_cookie),
 ):
     """验证Gemini API密钥的有效性"""
     logger.info("-" * 50 + "verify_gemini_key" + "-" * 50)
@@ -523,6 +537,7 @@ async def verify_selected_keys(
     request: VerifySelectedKeysRequest,
     chat_service: GeminiChatService = Depends(get_chat_service),
     key_manager: KeyManager = Depends(get_key_manager),
+    _admin=Depends(verify_admin_cookie),
 ):
     """批量验证选定Gemini API密钥的有效性"""
     logger.info("-" * 50 + "verify_selected_gemini_keys" + "-" * 50)

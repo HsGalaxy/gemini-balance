@@ -158,9 +158,9 @@ class Settings(BaseSettings):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # 设置默认AUTH_TOKEN（如果未提供）
-        if not self.AUTH_TOKEN and self.ALLOWED_TOKENS:
-            self.AUTH_TOKEN = self.ALLOWED_TOKENS[0]
+        # 安全修复：不再将 AUTH_TOKEN 默认回退为 ALLOWED_TOKENS[0]。
+        # AUTH_TOKEN 是管理员凭证，必须显式设置。
+        # 如果未设置 AUTH_TOKEN，管理面板将无法访问。
 
 
 # 创建全局配置实例
